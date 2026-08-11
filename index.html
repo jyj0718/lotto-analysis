@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>로또 번호 분석</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#2f6fed">
+</head>
+<body>
+<header class="app-header">
+  <h1>로또 6/45 번호 분석</h1>
+  <p class="subtitle" id="subtitle">데이터 불러오는 중...</p>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab-btn active" data-tab="lookup">회차별 당첨번호</button>
+  <button class="tab-btn" data-tab="streak">연속 2주 출현</button>
+  <button class="tab-btn" data-tab="most">최다 출현 번호</button>
+  <button class="tab-btn" data-tab="least">최소 출현 번호</button>
+  <button class="tab-btn" data-tab="map">지역별 당첨 지도</button>
+  <button class="tab-btn" data-tab="pair">동반출현 번호</button>
+  <button class="tab-btn" data-tab="predict">예상번호 생성</button>
+</nav>
+
+<main>
+  <!-- Tab 1: round lookup -->
+  <section class="tab-panel active" id="tab-lookup">
+    <div class="panel-controls">
+      <label for="roundInput">회차</label>
+      <input type="number" id="roundInput" min="1">
+      <button id="roundPrev" title="이전 회차">◀</button>
+      <button id="roundNext" title="다음 회차">▶</button>
+      <button id="roundLatest">최신회차</button>
+      <button id="updateBtn" title="로컬 업데이트 서버(서버시작.bat)를 통해 최신 회차 데이터를 반영합니다">최신회차 반영</button>
+      <span class="hint">1회 ~ <span id="maxRound">-</span>회 (매주 토요일 추첨)</span>
+    </div>
+    <div id="updateStatus" class="update-status" hidden></div>
+    <div id="roundResult" class="round-result"></div>
+  </section>
+
+  <!-- Tab 2: consecutive-week streak frequency -->
+  <section class="tab-panel" id="tab-streak">
+    <p class="panel-desc">
+      직전 회차와 이번 회차에 <strong>연속으로 2주 모두</strong> 당첨번호(6개 숫자, 보너스 제외)에 등장한 횟수를 번호별로 집계한 순위입니다.
+    </p>
+    <div id="streakResult" class="rank-grid"></div>
+  </section>
+
+  <!-- Tab 3: most frequent -->
+  <section class="tab-panel" id="tab-most">
+    <p class="panel-desc">1회부터 최신 회차까지 당첨번호(6개 숫자, 보너스 제외)에 가장 많이 나온 번호 순위입니다.</p>
+    <div id="mostResult" class="rank-grid"></div>
+  </section>
+
+  <!-- Tab 4: least frequent -->
+  <section class="tab-panel" id="tab-least">
+    <p class="panel-desc">1회부터 최신 회차까지 당첨번호(6개 숫자, 보너스 제외)에 가장 적게 나온 번호 순위입니다.</p>
+    <div id="leastResult" class="rank-grid"></div>
+  </section>
+
+  <!-- Tab 5: regional map -->
+  <section class="tab-panel" id="tab-map">
+    <p class="panel-desc" id="mapDesc">1등 당첨 배출점 주소를 기준으로 지역(시/도)별 당첨 횟수를 표시합니다.</p>
+
+    <div class="panel-controls">
+      <label for="mapRoundInput">회차별 조회</label>
+      <input type="number" id="mapRoundInput" min="1">
+      <button id="mapRoundPrev" title="이전 회차">◀</button>
+      <button id="mapRoundNext" title="다음 회차">▶</button>
+      <button id="mapRoundLatest">최신회차</button>
+      <button id="mapRoundClear">전체 누적 보기</button>
+      <span class="hint">배출점 정보는 262회부터 제공됩니다</span>
+    </div>
+
+    <div class="map-wrap">
+      <div class="map-svg-wrap" id="mapSvgWrap"></div>
+      <div class="map-side">
+        <div id="mapTooltip" class="map-tooltip">지역을 클릭하거나 마우스를 올려보세요.</div>
+        <div id="mapRoundDetail" class="map-round-detail" hidden></div>
+        <ol id="mapRanking" class="map-ranking"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab 6: co-occurrence (pair) analysis -->
+  <section class="tab-panel" id="tab-pair">
+    <p class="panel-desc">
+      1회부터 최신 회차까지 당첨번호(6개 숫자, 보너스 제외) 기준으로, 선택한 번호와 <strong>같은 회차에 함께 나온 번호</strong>의 순위입니다.
+      번호를 하나 선택해보세요.
+    </p>
+    <div class="pair-picker" id="pairPicker"></div>
+    <div id="pairSummary" class="pair-summary"></div>
+    <div id="pairResult" class="rank-grid"></div>
+  </section>
+
+  <!-- Tab 7: pattern-based next-round prediction -->
+  <section class="tab-panel" id="tab-predict">
+    <p class="panel-desc">
+      1회부터 최신 회차까지의 홀짝 비율, 동반출현, 연속번호(예: 12·13) 출현 패턴을 통계적으로 반영해 번호 조합을 만들어봅니다.
+      지금까지 실제 1등으로 나온 조합과 완전히 동일한 조합은 생성되지 않습니다.
+    </p>
+    <div class="disclaimer">
+      로또는 회차마다 완전히 독립적인 무작위 추첨입니다. 과거 통계 패턴은 미래 당첨을 예측하거나 보장하지 않으며,
+      이 기능은 참고 및 재미 목적의 통계적 번호 조합기일 뿐입니다.
+    </div>
+
+    <div class="pattern-stats">
+      <div class="pattern-stat-box">
+        <h4>회차당 홀수 개수 분포 (전체 6개 중)</h4>
+        <div id="oddDistChart" class="mini-histogram"></div>
+      </div>
+      <div class="pattern-stat-box">
+        <h4>회차당 연속번호 쌍 개수 분포</h4>
+        <div id="consecutiveDistChart" class="mini-histogram"></div>
+      </div>
+    </div>
+
+    <div class="best-pick-box">
+      <h4>종합 추천 조합 (출현 빈도 · 동반출현 · 홀짝 · 연속번호를 모두 반영한 1개 조합)</h4>
+      <div id="bestPickResult"></div>
+      <button id="bestPickRecalc">다시 계산</button>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="panel-controls">
+      <button id="predictGenerate">예상번호 5세트 생성</button>
+      <span class="hint">누를 때마다 통계 가중치를 반영해 새로 생성됩니다</span>
+    </div>
+    <div id="predictResult" class="predict-result"></div>
+
+    <hr class="section-divider">
+
+    <p class="panel-desc">
+      1회부터 최신 회차까지 <strong>1등번호 중 출현 빈도가 높은 숫자 3~4개</strong>를 뽑고,
+      그 번호들과 <strong>동반출현 빈도가 높은 숫자 2~3개</strong>를 조합해 6개를 만듭니다.
+      (진한 테두리 공 = 고빈도 기준 번호, 나머지 = 동반출현 조합 번호. 과거 1등 조합과 동일한 조합은 제외됩니다)
+    </p>
+    <div class="panel-controls">
+      <button id="freqComboGenerate">고빈도+동반출현 조합 5세트 생성</button>
+    </div>
+    <div id="freqComboResult" class="predict-result"></div>
+  </section>
+</main>
+
+<footer class="app-footer">
+  <p>당첨번호 출처: <a href="https://github.com/smok95/lotto" target="_blank" rel="noopener">smok95/lotto</a> (동행복권 공개 데이터 미러) ·
+     지도 경계 출처: <a href="https://github.com/southkorea/southkorea-maps" target="_blank" rel="noopener">southkorea/southkorea-maps</a> (KOSTAT) ·
+     개인용 참고 자료이며 실제 구매/당첨을 보증하지 않습니다.</p>
+</footer>
+
+<script src="data/draws.js"></script>
+<script src="data/kr-map.js"></script>
+<script src="data/regions.js"></script>
+<script src="js/app.js"></script>
+<script>
+  if ("serviceWorker" in navigator && (location.protocol === "http:" || location.protocol === "https:")) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () { /* ignore: e.g. not a secure context */ });
+    });
+  }
+</script>
+</body>
+</html>
