@@ -122,6 +122,13 @@
     // wrongly mean the phone itself, not the PC.
     var UPDATE_SERVER = (location.protocol === "file:") ? "http://localhost:5310" : "";
 
+    function isLocalHost() {
+      if (location.protocol === "file:") return true;
+      var h = location.hostname;
+      return h === "localhost" || h === "127.0.0.1" ||
+        /^192\.168\.\d+\.\d+$/.test(h) || /^10\.\d+\.\d+\.\d+$/.test(h) || /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(h);
+    }
+
     function showStatus(text, isError) {
       updateStatus.hidden = false;
       updateStatus.textContent = text;
@@ -149,11 +156,10 @@
         .catch(function (err) {
           clearTimeout(timeoutId);
           var reason = err.name === "AbortError" ? "시간 초과" : err.message;
-          showStatus(
-            "업데이트 서버에 연결할 수 없습니다 (" + reason + "). " +
-            "먼저 로또 폴더의 '서버시작.bat'을 실행한 뒤 다시 눌러주세요.",
-            true
-          );
+          var msg = isLocalHost()
+            ? "업데이트 서버에 연결할 수 없습니다 (" + reason + "). 먼저 로또 폴더의 '서버시작.bat'을 실행한 뒤 다시 눌러주세요."
+            : "이 사이트는 외부 공개(GitHub Pages) 버전이라 이 버튼으로는 갱신할 수 없습니다. PC에서 데이터를 갱신한 뒤 GitHub에 올려야 반영됩니다.";
+          showStatus(msg, true);
           updateBtn.disabled = false;
         });
     });
