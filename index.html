@@ -39,6 +39,22 @@
       <span class="hint">1회 ~ <span id="maxRound">-</span>회 (매주 토요일 추첨)</span>
     </div>
     <div id="updateStatus" class="update-status" hidden></div>
+    <div id="tokenSetup" class="token-setup" hidden>
+      <p>
+        GitHub Actions로 갱신하려면 <strong>이 저장소 전용, "Actions: Read and write" 권한만</strong> 가진
+        Fine-grained personal access token이 최초 1회 필요합니다. 이 토큰은 이 브라우저에만(localStorage) 저장되고
+        GitHub API 호출 외에는 어디로도 전송되지 않습니다.
+      </p>
+      <p>
+        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">여기서 토큰 만들기</a> →
+        Repository access를 "Only select repositories" → <code>lotto-analysis</code> 선택 →
+        Permissions에서 <strong>Actions: Read and write</strong> 설정 → Generate 후 아래에 붙여넣기
+      </p>
+      <div class="token-input-row">
+        <input type="password" id="ghTokenInput" placeholder="github_pat_...">
+        <button id="ghTokenSave">저장하고 실행</button>
+      </div>
+    </div>
     <div id="roundResult" class="round-result"></div>
   </section>
 

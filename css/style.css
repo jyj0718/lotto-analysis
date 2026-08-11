@@ -136,6 +136,40 @@ main {
   .update-status.error { background: #3a1f1f; color: #ff8a80; }
 }
 
+.token-setup {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.token-setup p { margin: 0 0 8px; }
+.token-setup a { color: var(--accent); }
+.token-setup code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.token-input-row { display: flex; gap: 8px; margin-top: 10px; }
+.token-input-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.token-input-row button {
+  border: 1px solid var(--border);
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
 .round-result {
   background: var(--surface);
   border: 1px solid var(--border);

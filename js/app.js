@@ -135,10 +135,8 @@
       updateStatus.classList.toggle("error", !!isError);
     }
 
-    updateBtn.addEventListener("click", function () {
-      updateBtn.disabled = true;
+    function runLocalUpdate() {
       showStatus("업데이트 서버에 연결 중...", false);
-
       var controller = new AbortController();
       var timeoutId = setTimeout(function () { controller.abort(); }, 120000);
 
@@ -156,12 +154,126 @@
         .catch(function (err) {
           clearTimeout(timeoutId);
           var reason = err.name === "AbortError" ? "시간 초과" : err.message;
-          var msg = isLocalHost()
-            ? "업데이트 서버에 연결할 수 없습니다 (" + reason + "). 먼저 로또 폴더의 '서버시작.bat'을 실행한 뒤 다시 눌러주세요."
-            : "이 사이트는 외부 공개(GitHub Pages) 버전이라 이 버튼으로는 갱신할 수 없습니다. PC에서 데이터를 갱신한 뒤 GitHub에 올려야 반영됩니다.";
-          showStatus(msg, true);
+          showStatus(
+            "업데이트 서버에 연결할 수 없습니다 (" + reason + "). 먼저 로또 폴더의 '서버시작.bat'을 실행한 뒤 다시 눌러주세요.",
+            true
+          );
           updateBtn.disabled = false;
         });
+    }
+
+    // ---- GitHub Actions-based update for the public (GitHub Pages) deployment ----
+    var GH_OWNER = "jyj0718";
+    var GH_REPO = "lotto-analysis";
+    var GH_WORKFLOW = "update-data.yml";
+    var GH_BRANCH = "master";
+    var GH_TOKEN_KEY = "lotto_gh_pat";
+    var tokenSetup = document.getElementById("tokenSetup");
+    var ghTokenInput = document.getElementById("ghTokenInput");
+    var ghTokenSave = document.getElementById("ghTokenSave");
+
+    function ghHeaders(token) {
+      return {
+        Authorization: "Bearer " + token,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      };
+    }
+
+    function pollWorkflowRun(token, sinceIso, attemptsLeft) {
+      if (attemptsLeft <= 0) {
+        showStatus("요청은 보냈지만 완료 확인이 오래 걸리네요. GitHub Actions 탭에서 진행 상황을 확인해보세요.", false);
+        updateBtn.disabled = false;
+        return;
+      }
+      fetch(
+        "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/actions/workflows/" + GH_WORKFLOW + "/runs?per_page=1",
+        { headers: ghHeaders(token) }
+      )
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          var run = data.workflow_runs && data.workflow_runs[0];
+          if (run && new Date(run.created_at) >= new Date(sinceIso)) {
+            if (run.status === "completed") {
+              showStatus(
+                run.conclusion === "success"
+                  ? "갱신 완료! 잠시 후 페이지를 새로고침합니다..."
+                  : "GitHub Actions 실행이 실패했습니다 (" + run.conclusion + "). Actions 탭에서 로그를 확인해주세요.",
+                run.conclusion !== "success"
+              );
+              if (run.conclusion === "success") setTimeout(function () { location.reload(); }, 1200);
+              else updateBtn.disabled = false;
+              return;
+            }
+            showStatus("GitHub Actions 실행 중... (" + run.status + ")", false);
+          }
+          setTimeout(function () { pollWorkflowRun(token, sinceIso, attemptsLeft - 1); }, 8000);
+        })
+        .catch(function () {
+          setTimeout(function () { pollWorkflowRun(token, sinceIso, attemptsLeft - 1); }, 8000);
+        });
+    }
+
+    function dispatchGithubActionsUpdate(token) {
+      showStatus("GitHub Actions 실행 요청 중...", false);
+      var dispatchedAt = new Date().toISOString();
+      fetch(
+        "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/actions/workflows/" + GH_WORKFLOW + "/dispatches",
+        { method: "POST", headers: ghHeaders(token), body: JSON.stringify({ ref: GH_BRANCH }) }
+      )
+        .then(function (res) {
+          if (res.status === 204) {
+            showStatus("요청 완료! GitHub Actions에서 처리 중입니다 (1~2분 소요)...", false);
+            setTimeout(function () { pollWorkflowRun(token, dispatchedAt, 18); }, 5000);
+            return;
+          }
+          if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem(GH_TOKEN_KEY);
+            tokenSetup.hidden = false;
+            showStatus("토큰이 유효하지 않거나 권한이 부족합니다. 토큰을 다시 만들어 입력해주세요.", true);
+            updateBtn.disabled = false;
+            return;
+          }
+          return res.text().then(function (t) {
+            showStatus("요청 실패 (" + res.status + "): " + t, true);
+            updateBtn.disabled = false;
+          });
+        })
+        .catch(function (err) {
+          showStatus("요청 실패: " + err.message, true);
+          updateBtn.disabled = false;
+        });
+    }
+
+    function runGithubActionsUpdate() {
+      var token = localStorage.getItem(GH_TOKEN_KEY);
+      if (!token) {
+        tokenSetup.hidden = false;
+        showStatus("먼저 아래 안내에 따라 GitHub 토큰을 입력해주세요.", false);
+        updateBtn.disabled = false;
+        return;
+      }
+      dispatchGithubActionsUpdate(token);
+    }
+
+    ghTokenSave.addEventListener("click", function () {
+      var token = ghTokenInput.value.trim();
+      if (!token) return;
+      localStorage.setItem(GH_TOKEN_KEY, token);
+      ghTokenInput.value = "";
+      tokenSetup.hidden = true;
+      updateBtn.disabled = true;
+      dispatchGithubActionsUpdate(token);
+    });
+
+    updateBtn.addEventListener("click", function () {
+      updateBtn.disabled = true;
+      tokenSetup.hidden = true;
+      if (isLocalHost()) {
+        runLocalUpdate();
+      } else {
+        runGithubActionsUpdate();
+      }
     });
 
     render(maxRound);
