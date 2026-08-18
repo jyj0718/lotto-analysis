@@ -17,6 +17,7 @@
 </header>
 
 <nav class="tabs" id="tabs">
+  <button class="tab-btn" data-tab="qrcheck">QR 당첨확인</button>
   <button class="tab-btn active" data-tab="lookup">회차별 당첨번호</button>
   <button class="tab-btn" data-tab="streak">연속 2주 출현</button>
   <button class="tab-btn" data-tab="most">최다 출현 번호</button>
@@ -27,6 +28,35 @@
 </nav>
 
 <main>
+  <!-- Tab 0: QR ticket check -->
+  <section class="tab-panel" id="tab-qrcheck">
+    <div class="disclaimer">
+      이 판정은 QR코드를 브라우저에서 자동 해독한 <strong>추정 결과</strong>이며, 동행복권의 공식 판정이 아닙니다.
+      QR 형식은 공식적으로 공개되어 있지 않아 100% 정확함을 보장할 수 없습니다.
+      실제 당첨 여부는 반드시 아래 "공식 사이트에서 확인" 버튼으로 다시 확인해주세요.
+    </div>
+
+    <div class="qr-scan-area">
+      <video id="qrVideo" class="qr-video" playsinline muted></video>
+      <canvas id="qrCanvas" hidden></canvas>
+      <div id="qrOverlayMsg" class="qr-overlay-msg"></div>
+    </div>
+    <div class="panel-controls">
+      <button id="qrRestartCam">카메라 다시 시작</button>
+      <span class="hint">로또 용지의 QR코드를 카메라에 비춰주세요</span>
+    </div>
+
+    <div class="qr-manual">
+      <label for="qrManualInput">또는 QR 스캔 앱으로 읽은 링크를 직접 붙여넣기</label>
+      <div class="token-input-row">
+        <input type="text" id="qrManualInput" placeholder="http://m.dhlottery.co.kr/qr.do?...">
+        <button id="qrManualCheck">확인</button>
+      </div>
+    </div>
+
+    <div id="qrResult" class="qr-result"></div>
+  </section>
+
   <!-- Tab 1: round lookup -->
   <section class="tab-panel active" id="tab-lookup">
     <div class="panel-controls">
@@ -172,6 +202,7 @@
 <script src="data/draws.js"></script>
 <script src="data/kr-map.js"></script>
 <script src="data/regions.js"></script>
+<script src="js/vendor/jsQR.js"></script>
 <script src="js/app.js"></script>
 <script>
   if ("serviceWorker" in navigator && (location.protocol === "http:" || location.protocol === "https:")) {

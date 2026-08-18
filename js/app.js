@@ -33,6 +33,7 @@
   }
 
   // ---------- tabs ----------
+  var qrCameraHooks = { start: function () {}, stop: function () {} };
   var tabBtns = document.querySelectorAll(".tab-btn");
   var panels = document.querySelectorAll(".tab-panel");
   tabBtns.forEach(function (btn) {
@@ -41,8 +42,220 @@
       panels.forEach(function (p) { p.classList.remove("active"); });
       btn.classList.add("active");
       document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+      if (btn.dataset.tab === "qrcheck") qrCameraHooks.start(); else qrCameraHooks.stop();
     });
   });
+
+  // ---------- Tab 0: QR ticket check ----------
+  (function initQrCheck() {
+    var video = document.getElementById("qrVideo");
+    var canvas = document.getElementById("qrCanvas");
+    var ctx = canvas.getContext("2d", { willReadFrequently: true });
+    var overlayMsg = document.getElementById("qrOverlayMsg");
+    var restartBtn = document.getElementById("qrRestartCam");
+    var manualInput = document.getElementById("qrManualInput");
+    var manualCheckBtn = document.getElementById("qrManualCheck");
+    var resultEl = document.getElementById("qrResult");
+
+    var stream = null;
+    var scanning = false;
+    var rafId = null;
+    var barcodeDetector = (typeof BarcodeDetector !== "undefined") ? new BarcodeDetector({ formats: ["qr_code"] }) : null;
+
+    function setOverlay(text) { overlayMsg.textContent = text || ""; }
+
+    function stopCamera() {
+      scanning = false;
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      if (stream) {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        stream = null;
+      }
+      video.srcObject = null;
+    }
+
+    function startCamera() {
+      stopCamera();
+      setOverlay("카메라를 여는 중...");
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+        .then(function (s) {
+          stream = s;
+          video.srcObject = s;
+          return video.play();
+        })
+        .then(function () {
+          setOverlay("");
+          scanning = true;
+          rafId = requestAnimationFrame(scanFrame);
+        })
+        .catch(function (err) {
+          setOverlay(
+            "카메라를 사용할 수 없습니다 (" + (err.name || err.message) + "). " +
+            "아래에서 QR 링크를 직접 붙여넣어 확인할 수 있습니다."
+          );
+        });
+    }
+
+    function scanFrame() {
+      if (!scanning) return;
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+        rafId = requestAnimationFrame(scanFrame);
+        return;
+      }
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      if (barcodeDetector) {
+        barcodeDetector.detect(canvas)
+          .then(function (codes) {
+            if (codes.length) { onDecoded(codes[0].rawValue); return; }
+            rafId = requestAnimationFrame(scanFrame);
+          })
+          .catch(function () { rafId = requestAnimationFrame(scanFrame); });
+      } else if (typeof jsQR === "function") {
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code && code.data) { onDecoded(code.data); return; }
+        rafId = requestAnimationFrame(scanFrame);
+      } else {
+        setOverlay("이 브라우저는 QR 스캔을 지원하지 않습니다. 아래에서 링크를 직접 붙여넣어주세요.");
+      }
+    }
+
+    function onDecoded(text) {
+      scanning = false;
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      setOverlay("QR 인식 완료");
+      stopCamera();
+      checkTicketText(text);
+    }
+
+    // Parses the (reverse-engineered, unofficial) dhlottery ticket QR payload:
+    // http://m.dhlottery.co.kr/qr.do?method=winQr&v=RRRR + ("m"+12 digits) per game.
+    function decodeLottoQr(text) {
+      var vMatch = text.match(/[?&]v=([^&]+)/);
+      var v = vMatch ? vMatch[1] : text.trim();
+      var roundMatch = v.match(/^(\d{4})/);
+      if (!roundMatch) return null;
+      var round = parseInt(roundMatch[1], 10);
+      var rest = v.slice(4);
+      var delimiter = rest.indexOf("m") !== -1 ? "m" : (rest.indexOf("q") !== -1 ? "q" : null);
+      if (!delimiter) return null;
+
+      var parts = rest.split(delimiter).filter(function (p) { return p.length > 0; });
+      var games = [];
+      parts.forEach(function (p) {
+        var digits = p.slice(0, 12);
+        if (!/^\d{12}$/.test(digits)) return;
+        var nums = [];
+        for (var i = 0; i < 12; i += 2) nums.push(parseInt(digits.slice(i, i + 2), 10));
+        games.push(nums);
+      });
+      if (!games.length) return null;
+      return { round: round, games: games };
+    }
+
+    function tierFor(matchCount, bonusMatch) {
+      if (matchCount === 6) return { tier: "1등", win: true };
+      if (matchCount === 5 && bonusMatch) return { tier: "2등", win: true };
+      if (matchCount === 5) return { tier: "3등", win: true };
+      if (matchCount === 4) return { tier: "4등", win: true };
+      if (matchCount === 3) return { tier: "5등", win: true };
+      return { tier: "낙첨", win: false };
+    }
+
+    function checkTicketText(rawText) {
+      resultEl.innerHTML = "";
+
+      var parsed = decodeLottoQr(rawText);
+      var officialUrl = /^https?:\/\//i.test(rawText) ? rawText : null;
+      var officialLinkHtml = officialUrl
+        ? '<a class="qr-official-link" href="' + officialUrl + '" target="_blank" rel="noopener">공식 사이트에서 확인하기</a>'
+        : "";
+
+      if (!parsed) {
+        resultEl.innerHTML =
+          '<div class="qr-game-card">' +
+          "인식된 내용을 로또 티켓 형식으로 해독하지 못했습니다. 로또 용지의 QR인지 확인하고 다시 시도해주세요." +
+          (officialLinkHtml ? "<br><br>" + officialLinkHtml : "") +
+          "</div>";
+        return;
+      }
+
+      var draw = drawByNo[parsed.round];
+      if (!draw) {
+        resultEl.innerHTML =
+          '<div class="qr-game-card">' +
+          parsed.round + "회는 아직 추첨 전이거나 보유한 데이터에 없어 자동 판정할 수 없습니다. " +
+          "최신회차 데이터를 반영한 뒤 다시 시도하거나, 공식 사이트에서 확인해주세요." +
+          (officialLinkHtml ? "<br><br>" + officialLinkHtml : "") +
+          "</div>";
+        return;
+      }
+
+      var drawSet = {};
+      draw.nums.forEach(function (n) { drawSet[n] = true; });
+      var labels = ["A", "B", "C", "D", "E"];
+
+      parsed.games.forEach(function (game, idx) {
+        var matchCount = 0;
+        var bonusMatch = false;
+        game.forEach(function (n) {
+          if (drawSet[n]) matchCount++;
+          if (n === draw.bonus) bonusMatch = true;
+        });
+        var result = tierFor(matchCount, bonusMatch);
+
+        var card = document.createElement("div");
+        card.className = "qr-game-card";
+        var header = document.createElement("div");
+        header.className = "game-header";
+        var label = document.createElement("span");
+        label.className = "game-label";
+        label.textContent = (labels[idx] || idx + 1) + "게임 · " + parsed.round + "회";
+        var tierEl = document.createElement("span");
+        tierEl.className = "game-tier" + (result.win ? " win" : "");
+        tierEl.textContent = result.tier + " (" + matchCount + "개 일치" + (bonusMatch ? " + 보너스" : "") + ")";
+        header.appendChild(label);
+        header.appendChild(tierEl);
+
+        var ballsRow = document.createElement("div");
+        ballsRow.className = "balls-row";
+        game.slice().sort(function (a, b) { return a - b; }).forEach(function (n) {
+          var el = ballEl(n);
+          if (!drawSet[n]) el.classList.add("no-match");
+          ballsRow.appendChild(el);
+        });
+
+        card.appendChild(header);
+        card.appendChild(ballsRow);
+        resultEl.appendChild(card);
+      });
+
+      resultEl.insertAdjacentHTML(
+        "beforeend",
+        '<div class="qr-game-card">' +
+        parsed.round + "회 당첨번호: " +
+        draw.nums.slice().sort(function (a, b) { return a - b; }).join(", ") + " + 보너스 " + draw.bonus +
+        (officialLinkHtml ? "<br><br>" + officialLinkHtml : "") +
+        "</div>"
+      );
+    }
+
+    restartBtn.addEventListener("click", function () {
+      resultEl.innerHTML = "";
+      startCamera();
+    });
+    manualCheckBtn.addEventListener("click", function () {
+      var text = manualInput.value.trim();
+      if (!text) return;
+      checkTicketText(text);
+    });
+
+    qrCameraHooks.start = function () { resultEl.innerHTML = ""; startCamera(); };
+    qrCameraHooks.stop = stopCamera;
+  })();
 
   // ---------- header ----------
   (function initHeader() {

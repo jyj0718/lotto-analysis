@@ -1,11 +1,12 @@
 // Minimal service worker: network-first (so updated data/*.js is always preferred
 // when online), falling back to cache when offline. Required for Android PWA install.
-var CACHE_NAME = "lotto-site-v1";
+var CACHE_NAME = "lotto-site-v2";
 var PRECACHE = [
   "./",
   "./index.html",
   "./css/style.css",
   "./js/app.js",
+  "./js/vendor/jsQR.js",
   "./data/draws.js",
   "./data/kr-map.js",
   "./data/regions.js",
