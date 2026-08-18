@@ -60,7 +60,10 @@
     var stream = null;
     var scanning = false;
     var rafId = null;
-    var barcodeDetector = (typeof BarcodeDetector !== "undefined") ? new BarcodeDetector({ formats: ["qr_code"] }) : null;
+    var barcodeDetector = null;
+    try {
+      if (typeof BarcodeDetector !== "undefined") barcodeDetector = new BarcodeDetector({ formats: ["qr_code"] });
+    } catch (e) { barcodeDetector = null; }
 
     function setOverlay(text) { overlayMsg.textContent = text || ""; }
 
@@ -77,23 +80,39 @@
     function startCamera() {
       stopCamera();
       setOverlay("카메라를 여는 중...");
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
-        .then(function (s) {
-          stream = s;
-          video.srcObject = s;
-          return video.play();
-        })
-        .then(function () {
-          setOverlay("");
-          scanning = true;
-          rafId = requestAnimationFrame(scanFrame);
-        })
-        .catch(function (err) {
-          setOverlay(
-            "카메라를 사용할 수 없습니다 (" + (err.name || err.message) + "). " +
-            "아래에서 QR 링크를 직접 붙여넣어 확인할 수 있습니다."
-          );
-        });
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setOverlay(
+          "이 브라우저(또는 앱 내 브라우저)는 카메라 접근을 지원하지 않습니다. " +
+          "기본 브라우저(Chrome 등)에서 열어보거나, 아래에서 QR 링크를 직접 붙여넣어 확인해주세요."
+        );
+        return;
+      }
+
+      try {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+          .then(function (s) {
+            stream = s;
+            video.srcObject = s;
+            return video.play();
+          })
+          .then(function () {
+            setOverlay("");
+            scanning = true;
+            rafId = requestAnimationFrame(scanFrame);
+          })
+          .catch(function (err) {
+            setOverlay(
+              "카메라를 사용할 수 없습니다 (" + (err.name || err.message) + "). " +
+              "아래에서 QR 링크를 직접 붙여넣어 확인할 수 있습니다."
+            );
+          });
+      } catch (err) {
+        setOverlay(
+          "카메라를 여는 중 오류가 발생했습니다 (" + (err.name || err.message) + "). " +
+          "아래에서 QR 링크를 직접 붙여넣어 확인해주세요."
+        );
+      }
     }
 
     function scanFrame() {
