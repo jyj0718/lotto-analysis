@@ -510,6 +510,19 @@ main {
 }
 .qr-overlay-msg:empty { display: none; }
 
+.qr-guide-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 62%;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  border: 3px solid rgba(255,255,255,0.85);
+  border-radius: 16px;
+  box-shadow: 0 0 0 999px rgba(0,0,0,0.35);
+  pointer-events: none;
+}
+
 .qr-manual { margin: 16px 0; }
 .qr-manual label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
 

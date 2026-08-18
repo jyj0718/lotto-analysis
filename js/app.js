@@ -115,9 +115,16 @@
       }
     }
 
+    function scanWithJsQR() {
+      if (typeof jsQR !== "function") return null;
+      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+      return (code && code.data) ? code.data : null;
+    }
+
     function scanFrame() {
       if (!scanning) return;
-      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      if (video.readyState !== video.HAVE_ENOUGH_DATA || !video.videoWidth) {
         rafId = requestAnimationFrame(scanFrame);
         return;
       }
@@ -125,17 +132,26 @@
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      // Some Android/Chrome versions expose BarcodeDetector but its on-device
+      // detector service is unavailable — detect() then just resolves empty
+      // forever instead of erroring. So always fall through to jsQR on the
+      // same frame rather than trusting the native API exclusively.
       if (barcodeDetector) {
         barcodeDetector.detect(canvas)
           .then(function (codes) {
             if (codes.length) { onDecoded(codes[0].rawValue); return; }
+            var text = scanWithJsQR();
+            if (text) { onDecoded(text); return; }
             rafId = requestAnimationFrame(scanFrame);
           })
-          .catch(function () { rafId = requestAnimationFrame(scanFrame); });
+          .catch(function () {
+            var text = scanWithJsQR();
+            if (text) { onDecoded(text); return; }
+            rafId = requestAnimationFrame(scanFrame);
+          });
       } else if (typeof jsQR === "function") {
-        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        var code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code && code.data) { onDecoded(code.data); return; }
+        var text = scanWithJsQR();
+        if (text) { onDecoded(text); return; }
         rafId = requestAnimationFrame(scanFrame);
       } else {
         setOverlay("이 브라우저는 QR 스캔을 지원하지 않습니다. 아래에서 링크를 직접 붙여넣어주세요.");
