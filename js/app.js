@@ -1262,5 +1262,102 @@
 
     document.getElementById("freqComboGenerate").addEventListener("click", renderFreqCombo);
     renderFreqCombo();
+
+    // ---- avoid-popular-pattern combos: doesn't change win probability, aims to
+    // reduce the chance of splitting the jackpot with other winners by steering
+    // away from combos many people are known to pick (birthdays, straight lines
+    // on the marking sheet, evenly-spaced numbers, etc.) ----
+    var GRID_COLS = 7;
+    function toGrid(n) {
+      var idx = n - 1;
+      return { row: Math.floor(idx / GRID_COLS), col: idx % GRID_COLS };
+    }
+
+    function popularPatternFlags(sortedNums) {
+      var flags = [];
+
+      if (sortedNums.every(function (n) { return n <= 31; })) flags.push("생일 범위(1~31)만 사용");
+
+      var maxRun = 1, run = 1;
+      for (var i = 1; i < sortedNums.length; i++) {
+        if (sortedNums[i] === sortedNums[i - 1] + 1) { run++; maxRun = Math.max(maxRun, run); }
+        else run = 1;
+      }
+      if (maxRun >= 3) flags.push("3개 이상 연속된 번호");
+
+      var diffs = [];
+      for (var j = 1; j < sortedNums.length; j++) diffs.push(sortedNums[j] - sortedNums[j - 1]);
+      if (diffs.every(function (d) { return d === diffs[0]; })) flags.push("일정한 간격(등간격) 배열");
+
+      var grids = sortedNums.map(toGrid);
+      if (grids.every(function (g) { return g.row === grids[0].row; })) flags.push("용지에서 같은 줄(가로)");
+      if (grids.every(function (g) { return g.col === grids[0].col; })) flags.push("용지에서 같은 칸(세로)");
+      if (grids.every(function (g) { return (g.row - g.col) === (grids[0].row - grids[0].col); })) flags.push("용지에서 대각선 일치");
+      if (grids.every(function (g) { return (g.row + g.col) === (grids[0].row + grids[0].col); })) flags.push("용지에서 반대각선 일치");
+
+      return flags;
+    }
+
+    function generateAvoidPopularSet() {
+      var best = null;
+      for (var attempt = 0; attempt < 200; attempt++) {
+        var pool = [];
+        for (var n = 1; n <= 45; n++) pool.push(n);
+        var picked = [];
+        for (var k = 0; k < 6; k++) {
+          var idx = Math.floor(Math.random() * pool.length);
+          picked.push(pool[idx]);
+          pool.splice(idx, 1);
+        }
+        var sorted = picked.sort(function (a, b) { return a - b; });
+        if (pastCombos[sorted.join(",")]) continue;
+
+        var flags = popularPatternFlags(sorted);
+        if (!flags.length) return { nums: sorted, flags: flags };
+        if (!best || flags.length < best.flags.length) best = { nums: sorted, flags: flags };
+      }
+      return best;
+    }
+
+    function renderAvoidPopular() {
+      var resultEl = document.getElementById("avoidPopularResult");
+      resultEl.innerHTML = "";
+      for (var i = 0; i < SET_COUNT; i++) {
+        var set = generateAvoidPopularSet();
+        if (!set) continue;
+
+        var row = document.createElement("div");
+        row.className = "predict-set";
+        var label = document.createElement("span");
+        label.className = "set-label";
+        label.textContent = (i + 1) + ".";
+        var ballsRow = document.createElement("span");
+        ballsRow.className = "balls-row";
+        set.nums.forEach(function (n) { ballsRow.appendChild(ballEl(n)); });
+        var meta = document.createElement("span");
+        meta.className = "set-meta";
+        meta.textContent = set.flags.length ? "회피 실패 항목 있음" : "회피 조건 모두 통과";
+
+        row.appendChild(label);
+        row.appendChild(ballsRow);
+        row.appendChild(meta);
+
+        if (set.flags.length) {
+          var checks = document.createElement("div");
+          checks.className = "avoid-checks";
+          set.flags.forEach(function (f) {
+            var span = document.createElement("span");
+            span.textContent = "⚠ " + f;
+            checks.appendChild(span);
+          });
+          row.appendChild(checks);
+        }
+
+        resultEl.appendChild(row);
+      }
+    }
+
+    document.getElementById("avoidPopularGenerate").addEventListener("click", renderAvoidPopular);
+    renderAvoidPopular();
   })();
 })();
