@@ -60,10 +60,11 @@
     var stream = null;
     var scanning = false;
     var rafId = null;
-    var barcodeDetector = null;
-    try {
-      if (typeof BarcodeDetector !== "undefined") barcodeDetector = new BarcodeDetector({ formats: ["qr_code"] });
-    } catch (e) { barcodeDetector = null; }
+    // Deliberately NOT using the native BarcodeDetector API here: on some Android/
+    // Chrome versions it exists but its on-device detector service is missing or
+    // broken, and detect() then either always resolves empty or never resolves at
+    // all — silently killing the scan loop no matter how well the code is framed.
+    // jsQR is a plain synchronous JS implementation with no such native dependency.
 
     function setOverlay(text) { overlayMsg.textContent = text || ""; }
 
@@ -90,7 +91,13 @@
       }
 
       try {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+        navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
+        })
           .then(function (s) {
             stream = s;
             video.srcObject = s;
@@ -124,38 +131,27 @@
 
     function scanFrame() {
       if (!scanning) return;
-      if (video.readyState !== video.HAVE_ENOUGH_DATA || !video.videoWidth) {
-        rafId = requestAnimationFrame(scanFrame);
+
+      if (typeof jsQR !== "function") {
+        setOverlay("이 브라우저는 QR 스캔을 지원하지 않습니다. 아래에서 링크를 직접 붙여넣어주세요.");
         return;
       }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Some Android/Chrome versions expose BarcodeDetector but its on-device
-      // detector service is unavailable — detect() then just resolves empty
-      // forever instead of erroring. So always fall through to jsQR on the
-      // same frame rather than trusting the native API exclusively.
-      if (barcodeDetector) {
-        barcodeDetector.detect(canvas)
-          .then(function (codes) {
-            if (codes.length) { onDecoded(codes[0].rawValue); return; }
-            var text = scanWithJsQR();
-            if (text) { onDecoded(text); return; }
-            rafId = requestAnimationFrame(scanFrame);
-          })
-          .catch(function () {
-            var text = scanWithJsQR();
-            if (text) { onDecoded(text); return; }
-            rafId = requestAnimationFrame(scanFrame);
-          });
-      } else if (typeof jsQR === "function") {
-        var text = scanWithJsQR();
-        if (text) { onDecoded(text); return; }
-        rafId = requestAnimationFrame(scanFrame);
-      } else {
-        setOverlay("이 브라우저는 QR 스캔을 지원하지 않습니다. 아래에서 링크를 직접 붙여넣어주세요.");
-      }
+      // Everything below is synchronous and wrapped defensively so a single bad
+      // frame (or any unexpected exception) can never silently kill the loop —
+      // the previous native-API version could die after one failed frame and
+      // then never detect anything again no matter how the QR was framed.
+      try {
+        if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          var text = scanWithJsQR();
+          if (text) { onDecoded(text); return; }
+        }
+      } catch (e) { /* ignore this frame, keep scanning */ }
+
+      rafId = requestAnimationFrame(scanFrame);
     }
 
     function onDecoded(text) {
