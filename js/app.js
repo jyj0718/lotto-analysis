@@ -914,8 +914,6 @@
   // ---------- Tab 7: pattern-based next-round prediction ----------
   (function initPredict() {
     var SET_COUNT = 5;
-    var oddPool = [], evenPool = [];
-    for (var n = 1; n <= 45; n++) (n % 2 === 1 ? oddPool : evenPool).push(n);
 
     // exact combinations that have already won 1st place historically — never regenerate these
     var pastCombos = {};
@@ -1097,90 +1095,6 @@
       }
       return candidates[candidates.length - 1];
     }
-
-    function sampleOddTarget() {
-      var total = oddCountDist.reduce(function (a, b) { return a + b; }, 0);
-      var r = Math.random() * total;
-      for (var i = 0; i < oddCountDist.length; i++) {
-        r -= oddCountDist[i];
-        if (r <= 0) return i;
-      }
-      return 3;
-    }
-
-    function weightFor(n, picked) {
-      var w = freq[n] || 1;
-      picked.forEach(function (p) { w += coMatrix[n][p]; });
-      return w;
-    }
-
-    function countConsecutive(sorted) {
-      var c = 0;
-      for (var i = 0; i < sorted.length - 1; i++) {
-        if (sorted[i + 1] === sorted[i] + 1) c++;
-      }
-      return c;
-    }
-
-    function generateOneSet() {
-      var fallback = null; // best non-past-winner candidate found so far, even if it breaks other soft rules
-      for (var attempt = 0; attempt < 50; attempt++) {
-        var targetOdd = sampleOddTarget();
-        var remainingOdd = targetOdd;
-        var remainingEven = 6 - targetOdd;
-        var picked = [];
-
-        while (picked.length < 6) {
-          var useOdd = Math.random() < (remainingOdd / (remainingOdd + remainingEven || 1));
-          if (remainingEven === 0) useOdd = true;
-          if (remainingOdd === 0) useOdd = false;
-          var pool = (useOdd ? oddPool : evenPool).filter(function (x) { return picked.indexOf(x) === -1; });
-          var pick = weightedPick(pool, function (x) { return weightFor(x, picked); });
-          picked.push(pick);
-          if (useOdd) remainingOdd--; else remainingEven--;
-        }
-
-        var sorted = picked.slice().sort(function (a, b) { return a - b; });
-        if (pastCombos[sorted.join(",")]) continue; // never regenerate an exact historical 1st-place combo
-
-        var consecutivePairs = countConsecutive(sorted);
-        var candidate = { nums: sorted, consecutivePairs: consecutivePairs };
-        if (consecutivePairs <= 3) return candidate;
-        if (!fallback) fallback = candidate;
-      }
-      return fallback;
-    }
-
-    function renderSets() {
-      var resultEl = document.getElementById("predictResult");
-      resultEl.innerHTML = "";
-      for (var i = 0; i < SET_COUNT; i++) {
-        var set = generateOneSet();
-        var oddCount = set.nums.filter(function (n) { return n % 2 === 1; }).length;
-        var sum = set.nums.reduce(function (a, b) { return a + b; }, 0);
-
-        var row = document.createElement("div");
-        row.className = "predict-set";
-        var label = document.createElement("span");
-        label.className = "set-label";
-        label.textContent = (i + 1) + ".";
-        var ballsRow = document.createElement("span");
-        ballsRow.className = "balls-row";
-        set.nums.forEach(function (n) { ballsRow.appendChild(ballEl(n)); });
-        var meta = document.createElement("span");
-        meta.className = "set-meta";
-        meta.textContent =
-          "홀" + oddCount + ":짝" + (6 - oddCount) + " · 연속쌍 " + set.consecutivePairs + "개 · 합계 " + sum;
-
-        row.appendChild(label);
-        row.appendChild(ballsRow);
-        row.appendChild(meta);
-        resultEl.appendChild(row);
-      }
-    }
-
-    document.getElementById("predictGenerate").addEventListener("click", renderSets);
-    renderSets();
 
     // ---- high-frequency base numbers + their top co-occurring partners ----
     var FREQ_POOL_SIZE = 15;
