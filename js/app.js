@@ -98,13 +98,30 @@
         navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            focusMode: { ideal: "continuous" }
           }
         })
           .then(function (s) {
             stream = s;
             video.srcObject = s;
+
+            // getUserMedia's default focus behavior varies a lot across devices —
+            // unlike a native camera app, it doesn't always keep refocusing for
+            // close-up subjects like a QR code held near the lens. Force continuous
+            // autofocus where the browser exposes that control; harmless no-op
+            // (and safely ignored) where it doesn't.
+            try {
+              var track = s.getVideoTracks()[0];
+              if (track && track.getCapabilities) {
+                var caps = track.getCapabilities();
+                if (caps.focusMode && caps.focusMode.indexOf("continuous") !== -1) {
+                  track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(function () {});
+                }
+              }
+            } catch (e) { /* focus control not supported on this browser, ignore */ }
+
             return video.play();
           })
           .then(function () {
