@@ -523,6 +523,22 @@ main {
   pointer-events: none;
 }
 
+.qr-debug-preview {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.qr-debug-preview img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+}
+
 .qr-manual { margin: 16px 0; }
 .qr-manual label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
 

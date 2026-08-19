@@ -44,7 +44,12 @@
     </div>
     <div class="panel-controls">
       <button id="qrRestartCam">카메라 다시 시작</button>
-      <span class="hint">QR코드가 네모 칸 안에 꽉 차게, 초점이 맞을 정도로 가까이 대주세요</span>
+      <button id="qrDebugCapture">지금 프레임 캡처해서 보기</button>
+      <span class="hint" id="qrDebugStatus">QR코드가 네모 칸 안에 꽉 차게, 초점이 맞을 정도로 가까이 대주세요</span>
+    </div>
+    <div id="qrDebugPreview" class="qr-debug-preview" hidden>
+      <p>아래는 방금 스캔 시도에 실제로 사용된 프레임입니다. QR이 선명하게 보이는지 확인해보세요.</p>
+      <img id="qrDebugImg" alt="캡처된 프레임">
     </div>
 
     <div class="qr-manual">

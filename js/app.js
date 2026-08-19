@@ -56,6 +56,9 @@
     var manualInput = document.getElementById("qrManualInput");
     var manualCheckBtn = document.getElementById("qrManualCheck");
     var resultEl = document.getElementById("qrResult");
+    var debugCaptureBtn = document.getElementById("qrDebugCapture");
+    var debugPreview = document.getElementById("qrDebugPreview");
+    var debugImg = document.getElementById("qrDebugImg");
 
     var stream = null;
     var scanning = false;
@@ -80,6 +83,7 @@
 
     function startCamera() {
       stopCamera();
+      scanAttempts = 0;
       setOverlay("카메라를 여는 중...");
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -129,6 +133,9 @@
       return (code && code.data) ? code.data : null;
     }
 
+    var scanAttempts = 0;
+    var debugStatus = document.getElementById("qrDebugStatus");
+
     function scanFrame() {
       if (!scanning) return;
 
@@ -146,6 +153,8 @@
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          scanAttempts++;
+          if (debugStatus) debugStatus.textContent = "스캔 시도: " + scanAttempts + "회 · 프레임 " + canvas.width + "x" + canvas.height;
           var text = scanWithJsQR();
           if (text) { onDecoded(text); return; }
         }
@@ -282,6 +291,16 @@
       var text = manualInput.value.trim();
       if (!text) return;
       checkTicketText(text);
+    });
+    debugCaptureBtn.addEventListener("click", function () {
+      if (!canvas.width || !canvas.height) {
+        debugPreview.hidden = false;
+        debugImg.removeAttribute("src");
+        debugStatus.textContent = "아직 캡처할 프레임이 없습니다 (카메라가 켜져 있는지 확인해주세요).";
+        return;
+      }
+      debugImg.src = canvas.toDataURL("image/jpeg", 0.85);
+      debugPreview.hidden = false;
     });
 
     qrCameraHooks.start = function () { resultEl.innerHTML = ""; startCamera(); };
