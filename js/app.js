@@ -1298,62 +1298,71 @@
       return flags;
     }
 
-    function generateAvoidPopularSet() {
+    function randomCombo() {
+      var pool = [];
+      for (var n = 1; n <= 45; n++) pool.push(n);
+      var picked = [];
+      for (var k = 0; k < 6; k++) {
+        var idx = Math.floor(Math.random() * pool.length);
+        picked.push(pool[idx]);
+        pool.splice(idx, 1);
+      }
+      return picked.sort(function (a, b) { return a - b; });
+    }
+
+    // Among many random candidates, pick the single one that (1) avoids the
+    // most popular-pattern flags, and (2) among ties, has the most numbers
+    // above 31 — birthday-anchored manual picks rarely go past 31, so more
+    // high numbers means fewer people are likely to have picked this combo.
+    function findBestAvoidPopular(attempts) {
       var best = null;
-      for (var attempt = 0; attempt < 200; attempt++) {
-        var pool = [];
-        for (var n = 1; n <= 45; n++) pool.push(n);
-        var picked = [];
-        for (var k = 0; k < 6; k++) {
-          var idx = Math.floor(Math.random() * pool.length);
-          picked.push(pool[idx]);
-          pool.splice(idx, 1);
-        }
-        var sorted = picked.sort(function (a, b) { return a - b; });
+      for (var i = 0; i < attempts; i++) {
+        var sorted = randomCombo();
         if (pastCombos[sorted.join(",")]) continue;
 
         var flags = popularPatternFlags(sorted);
-        if (!flags.length) return { nums: sorted, flags: flags };
-        if (!best || flags.length < best.flags.length) best = { nums: sorted, flags: flags };
+        var highCount = sorted.filter(function (n) { return n > 31; }).length;
+        var candidate = { nums: sorted, flags: flags, highCount: highCount };
+
+        if (
+          !best ||
+          flags.length < best.flags.length ||
+          (flags.length === best.flags.length && highCount > best.highCount)
+        ) {
+          best = candidate;
+        }
       }
       return best;
     }
 
     function renderAvoidPopular() {
       var resultEl = document.getElementById("avoidPopularResult");
+      var best = findBestAvoidPopular(3000);
       resultEl.innerHTML = "";
-      for (var i = 0; i < SET_COUNT; i++) {
-        var set = generateAvoidPopularSet();
-        if (!set) continue;
+      if (!best) return;
 
-        var row = document.createElement("div");
-        row.className = "predict-set";
-        var label = document.createElement("span");
-        label.className = "set-label";
-        label.textContent = (i + 1) + ".";
-        var ballsRow = document.createElement("span");
-        ballsRow.className = "balls-row";
-        set.nums.forEach(function (n) { ballsRow.appendChild(ballEl(n)); });
-        var meta = document.createElement("span");
-        meta.className = "set-meta";
-        meta.textContent = set.flags.length ? "회피 실패 항목 있음" : "회피 조건 모두 통과";
+      var ballsRow = document.createElement("div");
+      ballsRow.className = "balls-row";
+      best.nums.forEach(function (n) { ballsRow.appendChild(ballEl(n)); });
+      resultEl.appendChild(ballsRow);
 
-        row.appendChild(label);
-        row.appendChild(ballsRow);
-        row.appendChild(meta);
+      var meta = document.createElement("p");
+      meta.className = "set-meta";
+      meta.style.marginTop = "10px";
+      meta.textContent =
+        (best.flags.length ? "일부 회피 조건 미달" : "회피 조건 모두 통과") +
+        " · 31 초과 번호 " + best.highCount + "개 (3000개 후보 중 최적)";
+      resultEl.appendChild(meta);
 
-        if (set.flags.length) {
-          var checks = document.createElement("div");
-          checks.className = "avoid-checks";
-          set.flags.forEach(function (f) {
-            var span = document.createElement("span");
-            span.textContent = "⚠ " + f;
-            checks.appendChild(span);
-          });
-          row.appendChild(checks);
-        }
-
-        resultEl.appendChild(row);
+      if (best.flags.length) {
+        var checks = document.createElement("div");
+        checks.className = "avoid-checks";
+        best.flags.forEach(function (f) {
+          var span = document.createElement("span");
+          span.textContent = "⚠ " + f;
+          checks.appendChild(span);
+        });
+        resultEl.appendChild(checks);
       }
     }
 
